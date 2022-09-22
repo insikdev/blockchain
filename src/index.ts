@@ -1,22 +1,23 @@
 import express from "express";
 import { Blockchain } from "./blockchain";
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 const app = express();
 
 const blockchain = new Blockchain();
 
-app.get("/mine_block", (req, res) => {
+app.get("/mine_block", (_, res) => {
   const previous = blockchain.getPreviousBlock();
   const proof = blockchain.proofOfWork(previous.proof);
   const prevHash = blockchain.hash(previous);
-  blockchain.createBlock(proof, prevHash);
+  const block = blockchain.createBlock(proof, prevHash);
 
-  console.log(blockchain.chain);
-  console.log("isValid : ", blockchain.isChainValid());
+  res.json(block);
+});
 
-  res.end("mine");
+app.get("/get_chain", (_, res) => {
+  res.json(blockchain.chain);
 });
 
 app.listen(PORT, () => {
