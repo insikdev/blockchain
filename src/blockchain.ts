@@ -31,8 +31,8 @@ export class Blockchain {
 
   proofOfWork(previousProof: number) {
     let currentProof = 1;
-    let flag = false;
-    while (!flag) {
+
+    while (true) {
       const input = currentProof ** 2 - previousProof ** 2;
       const hash = crypto
         .createHash("sha256")
@@ -40,10 +40,10 @@ export class Blockchain {
         .digest("hex");
 
       if (hash.startsWith("0000")) {
-        flag = true;
-      } else {
-        currentProof += 1;
+        break;
       }
+
+      currentProof += 1;
     }
 
     return currentProof;
