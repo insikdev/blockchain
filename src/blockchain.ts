@@ -1,14 +1,12 @@
-import * as crypto from "node:crypto";
-
-type Block = {
-  index: number;
-  timestamp: string;
-  proof: number;
-  prevHash: string;
-};
+import axios from "axios";
+import { Block, Transaction } from "./models";
+import { Crypto } from "./utils";
 
 export class Blockchain {
   public chain: Block[] = [];
+  public transactions: Transaction[] = [];
+  public nodeLists: Set<string> = new Set();
+
   constructor() {
     this.createBlock(1, "0");
   }
@@ -19,9 +17,10 @@ export class Blockchain {
       timestamp: Date.now().toString(),
       proof,
       prevHash,
+      transactions: this.transactions,
     };
-
-    this.chain.push(block);
+    this.transactions = [];
+    this.chain = [...this.chain, block];
     return block;
   }
 
@@ -34,10 +33,7 @@ export class Blockchain {
 
     while (true) {
       const input = currentProof ** 2 - previousProof ** 2;
-      const hash = crypto
-        .createHash("sha256")
-        .update(input.toString())
-        .digest("hex");
+      const hash = Crypto.hash(input);
 
       if (hash.startsWith("0000")) {
         break;
@@ -49,28 +45,53 @@ export class Blockchain {
     return currentProof;
   }
 
-  hash(block: Block) {
-    return crypto
-      .createHash("sha256")
-      .update(JSON.stringify(block))
-      .digest("hex");
+  addTransaction({ sender, receiver, amount }: Transaction) {
+    const newTransaction: Transaction = { sender, receiver, amount };
+    this.transactions = [...this.transactions, newTransaction];
+    return this.getPreviousBlock().index + 1;
   }
 
-  isChainValid() {
-    return this.chain.every((current, index, arr) => {
-      if (index === 0) return true;
-      const previous = arr[index - 1];
+  addNode(address: string) {
+    // const url = new URL(address)
+    this.nodeLists.add(address);
+  }
 
-      if (current.prevHash !== this.hash(previous)) return false;
+  async replaceChain(): Promise<boolean> {
+    let longest;
+    let max = this.chain.length;
+
+    const result = await Promise.all(
+      [...this.nodeLists].map((address) =>
+        axios.get<{ length: number; chain: Block[] }>(`${address}/get_chain`)
+      )
+    ).then((res) => res.map((response) => response.data));
+
+    result.forEach(({ chain, length }) => {
+      if (length > max && Blockchain.isChainValid(chain)) {
+        max = length;
+        longest = chain;
+      }
+    });
+
+    if (longest != null) {
+      this.chain = longest;
+      return true;
+    }
+    return false;
+  }
+
+  static isChainValid(chain: Block[]) {
+    return chain.every((current, index, arr) => {
+      if (index === 0) return true;
+      const previous: Block = arr[index - 1];
+
+      if (current.prevHash !== Crypto.hash(previous)) return false;
 
       const currentProof = current.proof;
       const previousProof = previous.proof;
 
       const input = currentProof ** 2 - previousProof ** 2;
-      const hash = crypto
-        .createHash("sha256")
-        .update(input.toString())
-        .digest("hex");
+      const hash = Crypto.hash(input);
 
       return hash.startsWith("0000");
     });
